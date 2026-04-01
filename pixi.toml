@@ -39,6 +39,145 @@ create_snapshot = { cmd = "vinca-snapshot -d jazzy -o rosdistro_snapshot.yaml" }
 upload = "rattler-build upload anaconda -o robostack-jazzy -a $ANACONDA_API_TOKEN"
 build_continue_on_failure = { cmd = "rattler-build build --recipe-dir ./recipes -m ./conda_build_config.yaml -c https://prefix.dev/robostack-jazzy -c https://prefix.dev/conda-forge --continue-on-failure --skip-existing", depends-on = ["generate-recipes"] }
 
+# Subset helpers (EasyNav + easynav_plugins)
+# These tasks use ./easynav_subset/vinca.yaml to generate only the EasyNav-related recipes.
+
+[tasks.easynav-clean]
+cmd = "rm -rf output/{{ platform }} output/bld"
+depends-on = ["remove-recipes"]
+args = [{ arg = "platform", default = "linux-64" }]
+description = "Remove generated recipes and build artifacts for the EasyNav subset (recipes/, output/<platform>/, output/bld)."
+
+[tasks.easynav-generate-recipes]
+cmd = "vinca -d ./easynav_subset --platform {{ platform }} -m"
+depends-on = ["easynav-clean"]
+args = [{ arg = "platform", default = "linux-64" }]
+description = "Generate recipes for the EasyNav subset using easynav_subset/vinca.yaml."
+
+[tasks.easynav-build]
+cmd = "bash -lc 'if compgen -G \"./recipes/*/recipe.yaml\" >/dev/null; then rattler-build build --recipe-dir ./recipes --target-platform {{ platform }} -m ./conda_build_config.yaml -c https://prefix.dev/robostack-jazzy -c https://prefix.dev/conda-forge --skip-existing; else echo \"No recipes generated for EasyNav subset (likely already available in robostack-jazzy); nothing to build.\"; fi'"
+depends-on = ["easynav-generate-recipes"]
+args = [{ arg = "platform", default = "linux-64" }]
+description = "Build conda packages for the EasyNav subset recipes."
+
+[tasks.easynav-index]
+cmd = "rattler-index fs ./output --force"
+depends-on = ["easynav-build"]
+args = [{ arg = "platform", default = "linux-64" }]
+description = "Index ./output as a local conda channel (repodata.json) after building."
+
+[tasks.easynav-all]
+cmd = "echo 'EasyNav subset: clean → recipes → build → index done.'"
+depends-on = ["easynav-index"]
+args = [{ arg = "platform", default = "linux-64" }]
+description = "One-liner: clean, generate recipes, build, and index the EasyNav subset."
+
+# Subset helpers (PlanSys2)
+# These tasks use ./plansys2_subset/vinca.yaml to generate only the PlanSys2-related recipes.
+
+[tasks.plansys2-clean]
+cmd = "rm -rf output/{{ platform }} output/bld"
+depends-on = ["remove-recipes"]
+args = [{ arg = "platform", default = "linux-64" }]
+description = "Remove generated recipes and build artifacts for the PlanSys2 subset (recipes/, output/<platform>/, output/bld)."
+
+[tasks.plansys2-generate-recipes]
+cmd = "bash -lc 'cd \"$PIXI_PROJECT_ROOT\" && python ./.scripts/filter_repodata.py --url https://repo.prefix.dev/robostack-jazzy/{{ platform }}/repodata.json --out-channel ./.cache/robostack-jazzy-skip-channel --subdir {{ platform }} && vinca -d ./plansys2_subset --platform {{ platform }} -m'"
+depends-on = ["plansys2-clean"]
+args = [{ arg = "platform", default = "linux-64" }]
+description = "Generate recipes for the PlanSys2 subset using plansys2_subset/vinca.yaml."
+
+# NOTE: The standard plansys2-* tasks start with plansys2-clean, which removes
+# output/<platform>/ and would delete any previously built artifacts.
+# These *-no-clean variants preserve existing artifacts under output/.
+
+[tasks.plansys2-generate-recipes-no-clean]
+cmd = "bash -lc 'cd \"$PIXI_PROJECT_ROOT\" && python ./.scripts/filter_repodata.py --url https://repo.prefix.dev/robostack-jazzy/{{ platform }}/repodata.json --out-channel ./.cache/robostack-jazzy-skip-channel --subdir {{ platform }} && vinca -d ./plansys2_subset --platform {{ platform }} -m'"
+depends-on = ["remove-recipes"]
+args = [{ arg = "platform", default = "linux-64" }]
+description = "Generate recipes for the PlanSys2 subset without deleting existing output artifacts."
+
+[tasks.plansys2-build]
+cmd = "bash -lc 'if compgen -G \"./recipes/*/recipe.yaml\" >/dev/null; then rattler-build build --recipe-dir ./recipes --target-platform {{ platform }} -m ./conda_build_config.yaml -c https://prefix.dev/robostack-jazzy -c https://prefix.dev/conda-forge --skip-existing; else echo \"No recipes generated for PlanSys2 subset (already available in robostack-jazzy); nothing to build.\"; fi'"
+depends-on = ["plansys2-build-popf", "plansys2-generate-recipes"]
+args = [{ arg = "platform", default = "linux-64" }]
+description = "Build conda packages for the PlanSys2 subset recipes."
+
+[tasks.plansys2-build-no-clean]
+cmd = "bash -lc 'cd \"$PIXI_PROJECT_ROOT\" && if compgen -G \"./recipes/*/recipe.yaml\" >/dev/null; then rattler-build build --recipe-dir ./recipes --target-platform {{ platform }} -m ./conda_build_config.yaml -c ./output -c https://prefix.dev/robostack-jazzy -c https://prefix.dev/conda-forge --skip-existing; else echo \"No recipes generated for PlanSys2 subset (already available in robostack-jazzy); nothing to build.\"; fi'"
+depends-on = ["plansys2-build-popf-no-clean", "plansys2-generate-recipes-no-clean"]
+args = [{ arg = "platform", default = "linux-64" }]
+description = "Build PlanSys2 subset recipes without deleting output artifacts (and allow resolving freshly built deps from ./output)."
+
+[tasks.plansys2-build-popf]
+cmd = "bash -lc 'if [[ -f ./recipes/ros-jazzy-popf/recipe.yaml ]]; then rattler-build build --recipe ./recipes/ros-jazzy-popf/recipe.yaml --target-platform {{ platform }} -m ./conda_build_config.yaml -c https://prefix.dev/robostack-jazzy -c https://prefix.dev/conda-forge --skip-existing && rattler-index fs ./output --force; else echo \"popf recipe not generated (likely already in robostack-jazzy); skipping popf pre-build.\"; fi'"
+depends-on = ["plansys2-generate-recipes"]
+args = [{ arg = "platform", default = "linux-64" }]
+description = "Build ros-jazzy-popf first (needed by plansys2-popf-plan-solver), so subsequent PlanSys2 recipes can resolve dependencies after a clean."
+
+[tasks.plansys2-build-popf-no-clean]
+cmd = "bash -lc 'cd \"$PIXI_PROJECT_ROOT\" && if [[ -f ./recipes/ros-jazzy-popf/recipe.yaml ]]; then rattler-build build --recipe ./recipes/ros-jazzy-popf/recipe.yaml --target-platform {{ platform }} -m ./conda_build_config.yaml -c ./output -c https://prefix.dev/robostack-jazzy -c https://prefix.dev/conda-forge --skip-existing && rattler-index fs ./output --force; else echo \"popf recipe not generated (likely already in robostack-jazzy); skipping popf pre-build.\"; fi'"
+depends-on = ["plansys2-generate-recipes-no-clean"]
+args = [{ arg = "platform", default = "linux-64" }]
+description = "Build ros-jazzy-popf first without deleting output artifacts; indexes ./output for subsequent builds."
+
+[tasks.plansys2-index]
+cmd = "rattler-index fs ./output --force"
+depends-on = ["plansys2-build"]
+args = [{ arg = "platform", default = "linux-64" }]
+description = "Index ./output as a local conda channel (repodata.json) after building."
+
+[tasks.plansys2-index-no-clean]
+cmd = "rattler-index fs ./output --force"
+depends-on = ["plansys2-build-no-clean"]
+args = [{ arg = "platform", default = "linux-64" }]
+description = "Index ./output after PlanSys2 no-clean build (preserves existing artifacts)."
+
+[tasks.plansys2-all]
+cmd = "echo 'PlanSys2 subset: clean → recipes → build → index done.'"
+depends-on = ["plansys2-index"]
+args = [{ arg = "platform", default = "linux-64" }]
+description = "One-liner: clean, generate recipes, build, and index the PlanSys2 subset."
+
+[tasks.plansys2-all-no-clean]
+cmd = "echo 'PlanSys2 subset: recipes → build → index done (no-clean).'"
+depends-on = ["plansys2-index-no-clean"]
+args = [{ arg = "platform", default = "linux-64" }]
+description = "One-liner: generate recipes, build, and index the PlanSys2 subset without deleting existing output artifacts."
+
+# FORCE PlanSys2 subset build: generate recipes even if packages exist upstream,
+# and build without --skip-existing. Preserves existing artifacts under output/.
+
+[tasks.plansys2-force-generate-recipes-no-clean]
+cmd = "bash -lc 'cd \"$PIXI_PROJECT_ROOT\" && python ./.scripts/filter_repodata.py --url https://repo.prefix.dev/robostack-jazzy/{{ platform }}/repodata.json --out-channel ./.cache/robostack-jazzy-skip-channel --subdir {{ platform }} --remove ros-jazzy-popf ros-jazzy-rclcpp-cascade-lifecycle ros-jazzy-plansys2-bringup ros-jazzy-plansys2-bt-actions ros-jazzy-plansys2-core ros-jazzy-plansys2-domain-expert ros-jazzy-plansys2-executor ros-jazzy-plansys2-lifecycle-manager ros-jazzy-plansys2-msgs ros-jazzy-plansys2-pddl-parser ros-jazzy-plansys2-planner ros-jazzy-plansys2-popf-plan-solver ros-jazzy-plansys2-problem-expert ros-jazzy-plansys2-support-py ros-jazzy-plansys2-terminal ros-jazzy-plansys2-tests ros-jazzy-plansys2-tools && vinca -d ./plansys2_subset --platform {{ platform }} -m'"
+depends-on = ["remove-recipes"]
+args = [{ arg = "platform", default = "linux-64" }]
+description = "Generate PlanSys2 subset recipes in FORCE mode (ignores upstream existence) without deleting output artifacts."
+
+[tasks.plansys2-force-build-popf-no-clean]
+cmd = "bash -lc 'cd \"$PIXI_PROJECT_ROOT\" && if [[ -f ./recipes/ros-jazzy-popf/recipe.yaml ]]; then rattler-build build --recipe ./recipes/ros-jazzy-popf/recipe.yaml --target-platform {{ platform }} -m ./conda_build_config.yaml -c ./output -c https://prefix.dev/robostack-jazzy -c https://prefix.dev/conda-forge && rattler-index fs ./output --force; else echo \"popf recipe not generated; skipping popf pre-build.\"; fi'"
+depends-on = ["plansys2-force-generate-recipes-no-clean"]
+args = [{ arg = "platform", default = "linux-64" }]
+description = "Build ros-jazzy-popf first in FORCE mode (no --skip-existing), preserving existing output artifacts."
+
+[tasks.plansys2-force-build-no-clean]
+cmd = "bash -lc 'cd \"$PIXI_PROJECT_ROOT\" && if compgen -G \"./recipes/*/recipe.yaml\" >/dev/null; then rattler-build build --recipe-dir ./recipes --target-platform {{ platform }} -m ./conda_build_config.yaml -c ./output -c https://prefix.dev/robostack-jazzy -c https://prefix.dev/conda-forge; else echo \"No recipes generated for PlanSys2 FORCE subset; nothing to build.\"; fi'"
+depends-on = ["plansys2-force-build-popf-no-clean"]
+args = [{ arg = "platform", default = "linux-64" }]
+description = "Build PlanSys2 subset in FORCE mode (no --skip-existing) without deleting output artifacts."
+
+[tasks.plansys2-force-index-no-clean]
+cmd = "rattler-index fs ./output --force"
+depends-on = ["plansys2-force-build-no-clean"]
+args = [{ arg = "platform", default = "linux-64" }]
+description = "Index ./output after PlanSys2 FORCE build (preserves existing artifacts)."
+
+[tasks.plansys2-force-all-no-clean]
+cmd = "echo 'PlanSys2 subset: FORCE recipes → build → index done (no-clean).'"
+depends-on = ["plansys2-force-index-no-clean"]
+args = [{ arg = "platform", default = "linux-64" }]
+description = "One-liner: FORCE-generate, build, and index PlanSys2 subset without deleting output artifacts."
+
 [tasks.build]
 cmd = "rattler-build build --recipe-dir ./recipes -m ./conda_build_config.yaml -c https://prefix.dev/robostack-jazzy -c https://prefix.dev/conda-forge --skip-existing"
 depends-on = ["generate-recipes"]
