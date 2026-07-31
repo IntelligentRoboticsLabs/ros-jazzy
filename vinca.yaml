@@ -5,20 +5,21 @@ conda_index:
   - robostack.yaml
   - packages-ignore.yaml
 
-# Reminder for next full rebuild, the next build number should be 18
-build_number: 16
+# Reminder for next full rebuild, the next build number should be 21
+build_number: 18
 
 mutex_package:
   name: "ros2-distro-mutex"
-  version: "0.14.0"
+  version: "0.15.0"
   upper_bound: "x.x"
   run_constraints:
-    - libboost 1.88.*
-    - libboost-devel 1.88.*
+    - libboost 1.90.*
+    - libboost-devel 1.90.*
     - pcl 1.15.1.*
     - gazebo 11.*
-    - libprotobuf 6.31.1.*
-    - vtk 9.5.2.*
+    - libprotobuf 6.33.*
+    - vtk 9.6.2.*
+
 
 packages_skip_by_deps:
   - if: not linux
@@ -54,10 +55,12 @@ packages_select_by_deps:
   - dev_tools
   - diagnostics
   - teleop
+  - teleop_tools
   - robot
   - perception
   - navigation2
   - simulation
+  - simulation_interfaces
   - desktop_full
 
   - moveit
@@ -72,6 +75,9 @@ packages_select_by_deps:
   - gz_ros2_control
   - gz_ros2_control_demos
 
+  - joy_teleop
+  - key_teleop
+  - mouse_teleop
   - rviz_visual_tools
 
   - ur
@@ -82,25 +88,39 @@ packages_select_by_deps:
   - turtlebot3
   - turtlebot3_simulations
 
-  # TurtleBot 4 officially supports Linux only.
+  - turtlebot4_description
+  - turtlebot4_msgs
+  - turtlebot4_navigation
+  - turtlebot4_node
+
+  - turtlebot4_desktop
+  - turtlebot4_viz
+
+  - turtlebot4_gz_gui_plugins
+  - turtlebot4_gz_toolbox
+  - turtlebot4_gz_bringup
+  - turtlebot4_simulator
+
   - if: linux
-    then:
-      - turtlebot4_base
-      - turtlebot4_bringup
-      - turtlebot4_description
-      - turtlebot4_desktop
-      - turtlebot4_diagnostics
-      - turtlebot4_gz_bringup
-      - turtlebot4_gz_gui_plugins
-      - turtlebot4_gz_toolbox
-      - turtlebot4_msgs
-      - turtlebot4_navigation
-      - turtlebot4_node
+    then: 
       - turtlebot4_robot
-      - turtlebot4_setup
-      - turtlebot4_simulator
+      - turtlebot4_bringup
       - turtlebot4_tests
-      - turtlebot4_viz
+      - turtlebot4_diagnostics
+      - turtlebot4_bringup
+      - turtlebot4_base
+      - turtlebot4_setup
+
+  - irobot_create_toolbox
+  - irobot_create_nodes
+  - irobot_create_description
+  - irobot_create_control
+  - irobot_create_common_bringup
+  - irobot_create_gz_toolbox
+  - irobot_create_gz_plugins
+  - irobot_create_gz_bringup
+  - irobot_create_gz_sim
+  - irobot_create_msgs
 
   - ackermann-msgs
   - sbg_driver
@@ -115,6 +135,8 @@ packages_select_by_deps:
   - gripper_controllers
 
   - rosbridge_suite
+  - robotiq_controllers
+  - rosidl_generator_dds_idl
 
   - foxglove_bridge
   - foxglove_msgs
@@ -197,14 +219,32 @@ packages_select_by_deps:
   - picknik_ament_copyright
 
   - rqt_robot_monitor
+  - rqt_runtime_monitor
 
   # mujoco
   - mujoco_vendor
   - mujoco_ros2_control_msgs
 
   - rtest
-  
+
   - nmea-navsat-driver
+
+  - tracetools
+  - tracetools-launch
+  - tracetools-trace
+
+  - smacc2_msgs
+  - cl_ros2_timer
+
+  - urdf_tutorial
+
+  # py_trees stack, requested in https://github.com/RoboStack/ros-jazzy/issues/249
+  - py_trees
+  - py_trees_ros_interfaces
+  - py_trees_ros
+  - py_trees_js
+  - py_trees_ros_viewer
+  - py_trees_ros_tutorials
 
   # These packages are only built on Linux as they depend on Linux-specific API
   - if: linux
@@ -244,6 +284,8 @@ packages_select_by_deps:
       - realsense2-camera
       - realsense2-description
 
+      - septentrio_gnss_driver
+
   # These packages are currently only build on Linux, but they currently only build on
   # Linux as trying to build them in the past on macos or Windows resulted in errors
   - if: linux
@@ -255,13 +297,14 @@ packages_select_by_deps:
       - proto2ros
       # Uses linux-specific flags in  https://github.com/SteveMacenski/spatio_temporal_voxel_layer/blob/e23d730d35407bd8e2bf9c33d10388a6a07c735d/spatio_temporal_voxel_layer/CMakeLists.txt#L124,
       # but should be easy to fix
-      # disabled for now, see https://github.com/RoboStack/ros-jazzy/pull/161#issuecomment-3904979905
-      # - spatio_temporal_voxel_layer
+      - openvdb_vendor
+      - spatio_temporal_voxel_layer
       - io_context
       # Serial communication only implemented for linux
       - serial_driver
       - swri_serial_util
       - udp_driver
+      - smacc2
 
   # These packages are currently not build on Windows, but they be with some work
   - if: not win
@@ -307,6 +350,7 @@ packages_select_by_deps:
       - cloudini-ros
       - spacenav
       - rviz_2d_overlay_plugins
+      - vision_msgs_rviz_plugins
 
       # lbr_fri_ros2_stack
       - lbr_bringup
@@ -328,7 +372,7 @@ packages_select_by_deps:
       - kinematics_interface
       - kinematics_interface_kdl
       - libg2o
-      
+
       # graph-monitor related packages
       - rmw_stats_shim
       - rosgraph_monitor_msgs
